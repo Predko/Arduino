@@ -326,8 +326,16 @@ void displayClock()
   FastLED.show();
 }
 
-void displayTemperature() {
-  float tmp = dht.readTemperature(temperatureMode == 'F' ? true : false);
+void displayTemperature() 
+{
+  float tmp = 0;
+
+  for(int i = 0; i != 5; i++)
+  {
+    tmp += dht.readTemperature(temperatureMode == 'F' ? true : false);
+  }
+
+  tmp /= 5;  // среднее значение за 5 измерений
 
   if (isnan(tmp)) {
     Serial.println("Failed to read from DHT sensor!");
@@ -343,8 +351,16 @@ void displayTemperature() {
   }  
 }
 
-void displayHumidity() {
-  float hum = dht.readHumidity();
+void displayHumidity() 
+{
+  float hum = 0;
+  
+  for(int i = 0; i != 5; i++)
+  {
+    hum += dht.readHumidity();
+  }
+
+  hum /= 5;  // среднее значение за 5 измерений
 
   if (isnan(hum)) {
     Serial.println("Failed to read from DHT sensor!");
