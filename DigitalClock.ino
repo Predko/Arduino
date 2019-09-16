@@ -111,6 +111,86 @@ volatile bool dotOnOff;
 #define hourFormat  24                // Set this to 12 or to 24 hour format
 #define temperatureMode 'C'           // Set this to 'C' for Celcius or 'F' for Fahrenheit
 
+#define MAX_MEASUREMENTS 10
+
+
+// экземпляр класса аккамулирует некоторое количество измерений
+// (не больше MAX_MEASUREMENTS и равное указанному при создании).
+// Возращает среднее значение за последние numberOfMeasurements измерений
+class AverageValue 
+{
+public:
+  AverageValue(int nm);  // nm <= MAX_MEASUREMENTS
+  float Get();
+  void Init();  
+  void AddNext(float val);
+
+private:
+  float *values;
+  float summ;
+  int currentVal;
+  int count;
+  int numberOfMeasurements;
+};
+
+AverageValue::AverageValue(int nm) 
+{  
+  numberOfMeasurements = (nm > MAX_MEASUREMENTS) ? MAX_MEASUREMENTS : nm;
+
+  values = new float[numberOfMeasurements];
+  if(values == NULL)
+  {
+    numberOfMeasurements = 0; // недостаточно памяти для работы экземпляра
+    Serial.println("недостаточно памяти для работы экземпляра");
+  }
+
+  Init(); 
+}
+
+void AverageValue::Init()
+{
+  summ = 0;
+  count = 0;
+  currentVal = 0;
+  for(int i = 0; i != numberOfMeasurements; i++)
+  {
+    values[i] = 0;
+  }
+}
+
+float AverageValue::Get()
+{
+  return (count != 0) ? summ / count : NAN;
+}
+
+void AverageValue::AddNext(float val)
+{
+  if(val == NAN)
+  {
+    return;
+  }
+
+  summ -= values[currentVal];
+  
+  summ += val;
+  
+  values[currentVal] = val;
+  
+  currentVal++;
+  
+  if(currentVal == numberOfMeasurements)
+  {
+    currentVal = 0;
+  }
+   
+  if(count != numberOfMeasurements)
+  {
+    count++;
+  }
+}
+
+AverageValue AverageTemperature(10);  // примерно 5 минут 
+AverageValue AverageHumidity(10);
 
 void setup () {
 
@@ -141,7 +221,7 @@ void setup () {
 
   dotOnOff = DOT_ON;
 
-  t1.every(1000 * 29, refreshDisplay); 
+  t1.every(1000 * 29, refreshT1); 
   t2.every(1000, refreshTimer);
   t3.every(50, updateHue);
   
@@ -252,6 +332,39 @@ void updateHue()
   refreshDisplay();
 }
 
+
+void Collect_T_H()
+{
+  float tmp = dht.readTemperature(temperatureMode == 'F' ? true : false);
+  
+  if (isnan(tmp)) 
+  {
+    Serial.println("Failed to read from DHT sensor!");
+  } 
+  else 
+  {
+    AverageTemperature.AddNext(tmp);
+  }
+  
+  float hum = dht.readHumidity();
+  
+  if (isnan(hum)) 
+  {
+    Serial.println("Failed to read from DHT sensor!");
+  } 
+  else 
+  {
+    AverageHumidity.AddNext(hum);
+  }
+}
+
+void refreshT1()
+{
+  Collect_T_H();
+  
+  refreshDisplay();
+}
+
 void refreshDisplay() {
   switch (mode) {
     case CLOCK_MODE:
@@ -277,8 +390,10 @@ void refreshDisplay() {
   }
 }
 
-void refreshTimer() {
 
+
+void refreshTimer() 
+{
   if (mode == CLOCK_MODE || mode == CLOCK_TEMP_HUM_MODE) 
   {    
     dotOnOff = (dotOnOff == DOT_ON) ? DOT_OFF : DOT_ON;
@@ -328,52 +443,42 @@ void displayClock()
 
 void displayTemperature() 
 {
-  float tmp = 0;
+  float tmp = AverageTemperature.Get();
 
-  for(int i = 0; i != 5; i++)
+  if (isnan(tmp)) 
   {
-    tmp += dht.readTemperature(temperatureMode == 'F' ? true : false);
-  }
-
-  tmp /= 5;  // среднее значение за 5 измерений
-
-  if (isnan(tmp)) {
     Serial.println("Failed to read from DHT sensor!");
-  } else {
-    int tmp1 = tmp / 10;
-    int tmp2 = ((int)tmp) % 10;
-    displaySegments(HOUR_HI, tmp1);    
-    displaySegments(HOUR_LO, tmp2);
-    displaySegments(MINUTE_HI,  10);    
-    displaySegments(MINUTE_LO, (temperatureMode == 'F' ? 14 : 11));
-    displayDots(DOTS_BOTH_OFF_MODE);  
-    FastLED.show();    
-  }  
+    return;
+  } 
+
+  int tmp1 = tmp / 10;
+  int tmp2 = ((int)tmp) % 10;
+  displaySegments(HOUR_HI, tmp1);    
+  displaySegments(HOUR_LO, tmp2);
+  displaySegments(MINUTE_HI,  10);    
+  displaySegments(MINUTE_LO, (temperatureMode == 'F' ? 14 : 11));
+  displayDots(DOTS_BOTH_OFF_MODE);  
+  FastLED.show();    
 }
 
 void displayHumidity() 
 {
-  float hum = 0;
+  float hum = AverageHumidity.Get();
   
-  for(int i = 0; i != 5; i++)
+  if (isnan(hum)) 
   {
-    hum += dht.readHumidity();
-  }
-
-  hum /= 5;  // среднее значение за 5 измерений
-
-  if (isnan(hum)) {
     Serial.println("Failed to read from DHT sensor!");
-  } else {
-    int hum1 = hum / 10;
-    int hum2 = ((int)hum) % 10;
-    displaySegments(HOUR_HI, hum1);    
-    displaySegments(HOUR_LO, hum2);
-    displaySegments(MINUTE_HI,  10);    
-    displaySegments(MINUTE_LO,  12);
-    displayDots(DOTS_BOTH_OFF_MODE);  
-    FastLED.show();    
-  }  
+    return;
+  } 
+
+  int hum1 = hum / 10;
+  int hum2 = ((int)hum) % 10;
+  displaySegments(HOUR_HI, hum1);    
+  displaySegments(HOUR_LO, hum2);
+  displaySegments(MINUTE_HI,  10);    
+  displaySegments(MINUTE_LO,  12);
+  displayDots(DOTS_BOTH_OFF_MODE);  
+  FastLED.show();    
 }
 
 void displayScoreboard() {

@@ -4,6 +4,7 @@
             "name": "Win32",
             "includePath": [
                 "d:/MyProgram/Arduino/libraries/**",
+                "d:/MyProgram/Arduino/DigitalClock/libraries/**",
                 "d:/Program Files (x86)/Arduino/libraries/**",
                 "d:/Program Files (x86)/Arduino/hardware/arduino/avr/libraries/**",
                 "d:\\Program Files (x86)\\Arduino\\hardware\\arduino\\avr\\**",
@@ -16,7 +17,9 @@
             "cStandard": "c11",
             "cppStandard": "c++17",
             "intelliSenseMode": "gcc-x64",
-            "defines": [ "USBCON" ]
+            "defines": [
+                "USBCON"
+            ]
         }
     ],
     "version": 4
