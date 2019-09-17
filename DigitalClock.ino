@@ -32,13 +32,14 @@
  * 
  * "Небольшие изменения внесены Предко Виктором"
  */
-
+            
 #include <DHT.h>
 #include <FastLED.h>
 #include <Wire.h>
 #include <RTClib.h>
 #include <SoftwareSerial.h>
 #include <Timer.h>
+#include "AverageValue.h"
 
 // DHT11
 #define DHTPIN 12
@@ -111,86 +112,8 @@ volatile bool dotOnOff;
 #define hourFormat  24                // Set this to 12 or to 24 hour format
 #define temperatureMode 'C'           // Set this to 'C' for Celcius or 'F' for Fahrenheit
 
-#define MAX_MEASUREMENTS 10
-
-
-// экземпляр класса аккамулирует некоторое количество измерений
-// (не больше MAX_MEASUREMENTS и равное указанному при создании).
-// Возращает среднее значение за последние numberOfMeasurements измерений
-class AverageValue 
-{
-public:
-  AverageValue(int nm);  // nm <= MAX_MEASUREMENTS
-  float Get();
-  void Init();  
-  void AddNext(float val);
-
-private:
-  float *values;
-  float summ;
-  int currentVal;
-  int count;
-  int numberOfMeasurements;
-};
-
-AverageValue::AverageValue(int nm) 
-{  
-  numberOfMeasurements = (nm > MAX_MEASUREMENTS) ? MAX_MEASUREMENTS : nm;
-
-  values = new float[numberOfMeasurements];
-  if(values == NULL)
-  {
-    numberOfMeasurements = 0; // недостаточно памяти для работы экземпляра
-    Serial.println("недостаточно памяти для работы экземпляра");
-  }
-
-  Init(); 
-}
-
-void AverageValue::Init()
-{
-  summ = 0;
-  count = 0;
-  currentVal = 0;
-  for(int i = 0; i != numberOfMeasurements; i++)
-  {
-    values[i] = 0;
-  }
-}
-
-float AverageValue::Get()
-{
-  return (count != 0) ? summ / count : NAN;
-}
-
-void AverageValue::AddNext(float val)
-{
-  if(val == NAN)
-  {
-    return;
-  }
-
-  summ -= values[currentVal];
-  
-  summ += val;
-  
-  values[currentVal] = val;
-  
-  currentVal++;
-  
-  if(currentVal == numberOfMeasurements)
-  {
-    currentVal = 0;
-  }
-   
-  if(count != numberOfMeasurements)
-  {
-    count++;
-  }
-}
-
-AverageValue AverageTemperature(10);  // примерно 5 минут 
-AverageValue AverageHumidity(10);
+AverageValue AverageTemperature(5);  // примерно 5 минут 
+AverageValue AverageHumidity(5);
 
 void setup () {
 
@@ -332,14 +255,16 @@ void updateHue()
   refreshDisplay();
 }
 
+#define FAILED_TO_READ_DHT "Failed to read from DHT sensor!"
 
-void Collect_T_H()
+
+void Collect_T_H() // Чтение данных сенсоров температуры и влажности
 {
   float tmp = dht.readTemperature(temperatureMode == 'F' ? true : false);
   
   if (isnan(tmp)) 
   {
-    Serial.println("Failed to read from DHT sensor!");
+    Serial.println(FAILED_TO_READ_DHT);
   } 
   else 
   {
@@ -350,7 +275,7 @@ void Collect_T_H()
   
   if (isnan(hum)) 
   {
-    Serial.println("Failed to read from DHT sensor!");
+    Serial.println(FAILED_TO_READ_DHT);
   } 
   else 
   {
@@ -447,7 +372,7 @@ void displayTemperature()
 
   if (isnan(tmp)) 
   {
-    Serial.println("Failed to read from DHT sensor!");
+    Serial.println(FAILED_TO_READ_DHT);
     return;
   } 
 
@@ -467,7 +392,7 @@ void displayHumidity()
   
   if (isnan(hum)) 
   {
-    Serial.println("Failed to read from DHT sensor!");
+    Serial.println(FAILED_TO_READ_DHT);
     return;
   } 
 
