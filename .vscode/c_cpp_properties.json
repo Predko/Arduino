@@ -1,25 +1,73 @@
 {
-    "configurations": [
+    "configurations": 
+    [
         {
             "name": "Win32",
-            "includePath": [
-                "d:/MyProgram/Arduino/libraries/**",
-                "d:/MyProgram/Arduino/DigitalClock/libraries/**",
+            "includePath": 
+            [
+                "${workspaceFolder}/libraries/**",
+                "d:/Program Files (x86)/Arduino/hardware/tools/avr/lib/gcc/avr/7.3.0/include",
+                "d:/Program Files (x86)/Arduino/hardware/arduino/avr/cores/arduino",
+                "d:/Program Files (x86)/Arduino/hardware/arduino/avr/variants/standard",
+                "d:/Program Files (x86)/Arduino",
                 "d:/Program Files (x86)/Arduino/libraries/**",
                 "d:/Program Files (x86)/Arduino/hardware/arduino/avr/libraries/**",
                 "d:\\Program Files (x86)\\Arduino\\hardware\\arduino\\avr\\**",
                 "d:\\Program Files (x86)\\Arduino\\tools\\**"
             ],
-            "forcedInclude": [
+            "forcedInclude": 
+            [
+                "d:\\Program Files (x86)\\Arduino\\hardware\\arduino\\avr\\cores\\arduino\\Arduino.h"
+            ],
+            "compilerPath": "C:/Program Files (x86)/Microsoft Visual Studio/2017/Community/VC/Tools/MSVC/14.16.27023/bin/Hostx64/x64/cl.exe",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "msvc-x64",
+            "defines": 
+            [
+                "USBCON"
+            ],
+            "browse": 
+            {
+                "path": [],
+                "limitSymbolsToIncludedHeaders": true
+            }
+        },
+        {
+            "name": "GCC",
+            "includePath": 
+            [
+                "${workspaceFolder}/libraries/**",
+                "d:/Program Files (x86)/Arduino/hardware/tools/avr/lib/gcc/avr/7.3.0/include",
+                "d:/Program Files (x86)/Arduino/hardware/arduino/avr/cores/arduino",
+                "d:/Program Files (x86)/Arduino/hardware/arduino/avr/variants/standard",
+                "d:/Program Files (x86)/Arduino",
+                "d:/Program Files (x86)/Arduino/libraries/**",
+                "d:/Program Files (x86)/Arduino/hardware/arduino/avr/libraries/**",
+                "d:\\Program Files (x86)\\Arduino\\hardware\\arduino\\avr\\**",
+                "d:\\Program Files (x86)\\Arduino\\tools\\**"
+            ],
+            "forcedInclude": 
+            [
                 "d:\\Program Files (x86)\\Arduino\\hardware\\arduino\\avr\\cores\\arduino\\Arduino.h"
             ],
             "compilerPath": "\"D:/Program Files (x86)/Arduino/hardware/tools/avr/bin/avr-gcc.exe\"",
             "cStandard": "c11",
             "cppStandard": "c++17",
-            "intelliSenseMode": "gcc-x64",
-            "defines": [
+            "intelliSenseMode": "msvc-x64",
+            "browse": 
+            {
+                "path": [],
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "defines": 
+            [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
                 "USBCON"
-            ]
+            ],
+            "windowsSdkVersion": "10.0.17763.0"
         }
     ],
     "version": 4
