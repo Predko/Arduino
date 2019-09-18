@@ -3,6 +3,6 @@
     "configuration": "cpu=atmega328old",
     "sketch": "DigitalClock.ino",
     "output": "build",
-    "port": "COM13",
+    "port": "COM12",
     "programmer": "ArduinoISP"
 }

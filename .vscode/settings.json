@@ -1,5 +1,11 @@
 {"settings": {
     "arduino.defaultBaudRate": 9600,
     "arduino.path": "d:\\Program Files (x86)\\Arduino\\"
+  },
+  "files.associations": {
+    "chrono": "cpp",
+    "xhash": "cpp",
+    "xtree": "cpp",
+    "xutility": "cpp"
   }
 }

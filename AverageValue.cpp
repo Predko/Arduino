@@ -8,7 +8,7 @@ AverageValue::AverageValue(int nm)
 {  
   numberOfMeasurements = (nm > MAX_MEASUREMENTS) ? MAX_MEASUREMENTS : nm;
 
-  values = new float[numberOfMeasurements];
+  values = new int[numberOfMeasurements];
   if(values == NULL)
   {
     numberOfMeasurements = 0; // недостаточно памяти для работы экземпляра
@@ -20,6 +20,11 @@ AverageValue::AverageValue(int nm)
 
 void AverageValue::Init()
 {
+  if(values == NULL)
+  {
+    return;
+  }
+
   summ = 0;
   count = 0;
   currentVal = 0;
@@ -29,14 +34,19 @@ void AverageValue::Init()
   }
 }
 
-float AverageValue::Get()
+int AverageValue::Get()
 {
-  return (count != 0) ? summ / count : NAN;
+  if(values == NULL || count == 0)
+  {
+    return INT16_MIN;
+  }
+
+  return summ / count;
 }
 
-void AverageValue::AddNext(float val)
+void AverageValue::AddNext(int val)
 {
-  if(val == NAN)
+  if(values == NULL)
   {
     return;
   }

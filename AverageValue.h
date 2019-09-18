@@ -12,13 +12,13 @@ class AverageValue
 {
 public:
   AverageValue(int nm);  // nm <= MAX_MEASUREMENTS
-  float Get();
+  int Get();
   void Init();  
-  void AddNext(float val);
+  void AddNext(int val);
 
 private:
-  float *values;
-  float summ;
+  int *values;
+  int summ;
   int currentVal;
   int count;
   int numberOfMeasurements;

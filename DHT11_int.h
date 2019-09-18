@@ -47,7 +47,7 @@
 class DHTint 
 {
   public:
-   DHTint(uint8_t pin, uint8_t type, uint8_t count=6);
+   DHTint(uint8_t pin, uint8_t count=6);
    void begin(uint8_t usec=55);
    int readTemperature(bool S=false, bool force=false);
    int convertCtoF(int);
@@ -57,7 +57,7 @@ class DHTint
 
  private:
   uint8_t data[5];
-  uint8_t _pin, _type;
+  uint8_t _pin;
   #ifdef __AVR
     // Use direct GPIO access on an 8-bit AVR so keep track of the port and bitmask
     // for the digital pin connected to the DHT.  Other platforms will use digitalRead.

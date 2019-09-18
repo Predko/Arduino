@@ -26,12 +26,7 @@
             "defines": 
             [
                 "USBCON"
-            ],
-            "browse": 
-            {
-                "path": [],
-                "limitSymbolsToIncludedHeaders": true
-            }
+            ]
         },
         {
             "name": "GCC",
@@ -62,9 +57,6 @@
             },
             "defines": 
             [
-                "_DEBUG",
-                "UNICODE",
-                "_UNICODE",
                 "USBCON"
             ],
             "windowsSdkVersion": "10.0.17763.0"

@@ -43,15 +43,14 @@
  *  @param  count
  *          number of sensors
  */
-DHTint::DHTint(uint8_t pin, uint8_t type, uint8_t count) {
+DHTint::DHTint(uint8_t pin, uint8_t count) {
   _pin = pin;
-  _type = type;
-/*
+
 #ifdef __AVR
   _bit = digitalPinToBitMask(pin);
   _port = digitalPinToPort(pin);
 #endif
-*/
+
   _maxcycles =
       microsecondsToClockCycles(1000); // 1 millisecond timeout for
                                        // reading pulses from DHT sensor.
@@ -89,17 +88,19 @@ void DHTint::begin(uint8_t usec) {
  */
 int DHTint::readTemperature(bool S, bool force) 
 {
-  int f = 0;
-
+  int f = INT16_MIN;
+  
   if (read(force)) 
   {
     f = data[2];
+    
     if (data[3] & 0x80) 
     {
       f = -1 - f;
     }
-    f *= 10;
-    f += (data[3] & 0x0f);
+    
+    f = f * 10 + (data[3] & 0x0f);
+    
     if (S) 
     {
       f = convertCtoF(f);
@@ -112,15 +113,15 @@ int DHTint::readTemperature(bool S, bool force)
  *  @brief  Converts Celcius to Fahrenheit
  *  @param  c
  *					value in Celcius
- *	@return float value in Fahrenheit
+ *	@return int value in Fahrenheit * 10
  */
-int DHTint::convertCtoF(int c) { return c * 18 + 320; } 
+int DHTint::convertCtoF(int c) { return c * 9 / 5 + 320; } 
 
 /*!
  *  @brief  Converts Fahrenheit to Celcius
  *  @param  f
  *					value in Fahrenheit
- *	@return float value in Celcius
+ *	@return int value in Celcius * 10
  */
 int DHTint::convertFtoC(int f) { return (f - 320) * 5 / 9; }
 
@@ -128,11 +129,11 @@ int DHTint::convertFtoC(int f) { return (f - 320) * 5 / 9; }
  *  @brief  Read Humidity
  *  @param  force
  *					force read mode
- *	@return float value - humidity in percent
+ *	@return int value humidity in percent * 10
  */
 int DHTint::readHumidity(bool force) 
 {
-  int f = 0;
+  int f = INT16_MIN;
   if (read(force)) 
   {
     f = data[0] * 10  + data[1];
@@ -145,7 +146,7 @@ int DHTint::readHumidity(bool force)
  *seconds.
  *  @param  force
  *          true if using force mode
- *	@return float value
+ *	@return int value * 10
  */
 bool DHTint::read(bool force) {
   // Check if sensor was read less than two seconds ago and return early
@@ -174,7 +175,7 @@ bool DHTint::read(bool force) {
   // First set data line low for a period according to sensor type
   pinMode(_pin, OUTPUT);
   digitalWrite(_pin, LOW);
-  delayMicroseconds(1100); // data sheet says "at least 1ms"
+  delay(22); // data sheet says at least 18ms, 20ms just to be safe
  
   uint32_t cycles[80];
   

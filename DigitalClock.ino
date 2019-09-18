@@ -33,19 +33,23 @@
  * "Небольшие изменения внесены Предко Виктором"
  */
             
-#include <DHT.h>
+
+
+#include "DHT11_int.h"
 #include <FastLED.h>
 #include <Wire.h>
 #include <RTClib.h>
 #include <SoftwareSerial.h>
 #include <Timer.h>
+
 #include "AverageValue.h"
+#include "SplitedString.h"
+
 
 // DHT11
 #define DHTPIN 12
-#define DHTTYPE DHT11
 
-DHT dht(DHTPIN, DHTTYPE);
+DHTint dht(DHTPIN);
 
 // LED
 #define NUM_LEDS 29     
@@ -91,7 +95,7 @@ Timer t1;
 Timer t2;
 Timer t3;
 
-String btBuffer;
+
 CRGB colorCRGB = CRGB::MediumVioletRed;           // Change this if you want another default color, for example CRGB::Blue
 CHSV colorCHSV = CHSV(95, 255, 255);  // Green
 CRGB colorOFF  = CRGB::Black;      // Color of the segments that are 'disabled'. You can also set it to CRGB::Black
@@ -115,6 +119,8 @@ volatile bool dotOnOff;
 AverageValue AverageTemperature(5);  // примерно 5 минут 
 AverageValue AverageHumidity(5);
 
+SplitedString buffer;
+
 void setup () {
 
   // Initialize LED strip
@@ -127,17 +133,16 @@ void setup () {
   while (!Serial) { /* Wait until serial is ready */ }
 
   BTserial.begin(9600);
-  Serial.println("BTserial started at 9600");
-
+  
   dht.begin();
 
   if (!rtc.begin()) {
-    Serial.println("Couldn't find RTC");
+    //Serial.println("Couldn't find RTC");
     while (1);
   }
 
   if (rtc.lostPower()) {
-    Serial.println("RTC lost power, lets set the time!");
+    //Serial.println("RTC lost power, lets set the time!");
     // following line sets the RTC to the date & time this sketch was compiled
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
   }
@@ -168,72 +173,121 @@ void loop () {
   if (BTserial.available())
   {
     char received = BTserial.read();
-    btBuffer += received; 
-
+    
     if (received == '|' || received == '.' || received == '\n')
     {
         processCommand();
-        btBuffer = "";
     }
+    else
+    {
+      buffer += received;
+    }
+    
   }
 }
 
+#define cmd_RGBD '0'
+#define cmd_HSVD '1'
+#define cmd_RTC  '2'
+#define cmd_CLOCK '3'
+#define cmd_TEMPERATURE '4'
+#define cmd_HUMIDITY '5'
+#define cmd_SCOREBOARD '6'
+#define cmd_STARTTIMER '7'
+#define cmd_STOPTIMER '8'
+#define cmd_CHANGINGPATTERN '9'
+#define cmd_CLOCK_TMP_HUM 'A'
+
+
 void processCommand(){
 
-  if (btBuffer.startsWith("RGBD")) {
-    long R = getValue(btBuffer, ',', 1).toInt();
-    long G = getValue(btBuffer, ',', 2).toInt();
-    long B = getValue(btBuffer, ',', 3).toInt();
-    long D = getValue(btBuffer, ',', 4).toInt();
+  
+  if (buffer.GetFirstChar(0) == cmd_RGBD) 
+  {
+    long R = atoi(buffer.getValue(1));
+    long G = atoi(buffer.getValue(2));
+    long B = atoi(buffer.getValue(3));
+    long D = atoi(buffer.getValue(4));
     colorCRGB.red = R;
     colorCRGB.green = G;
     colorCRGB.blue = B;
     colorMODE = CRGB_MODE;
     if (D > 0) FastLED.setBrightness(D); 
-  } else if (btBuffer.startsWith("HSVD")) {
-    long H = getValue(btBuffer, ',', 1).toInt();
-    long S = getValue(btBuffer, ',', 2).toInt();
-    long V = getValue(btBuffer, ',', 3).toInt();
-    long D = getValue(btBuffer, ',', 4).toInt();
+  } 
+  else 
+  if (buffer.GetFirstChar(0) == cmd_HSVD) 
+  {
+    long H = atoi(buffer.getValue(1));
+    long S = atoi(buffer.getValue(2));
+    long V = atoi(buffer.getValue(3));
+    long D = atoi(buffer.getValue(4));
     colorCHSV.hue = H;
     colorCHSV.sat = S;
     colorCHSV.val = V;
     colorMODE = CHSV_MODE;
     if (D > 0) FastLED.setBrightness(D);
-  } else if (btBuffer.startsWith("RTC")) {
-    long y = getValue(btBuffer, ',', 1).toInt();
-    long m = getValue(btBuffer, ',', 2).toInt();
-    long d = getValue(btBuffer, ',', 3).toInt();
-    long h = getValue(btBuffer, ',', 4).toInt();
-    long mm = getValue(btBuffer, ',', 5).toInt();
-    long s = getValue(btBuffer, ',', 6).toInt();
+  } 
+  else 
+  if (buffer.GetFirstChar(0) == cmd_RTC) 
+  {
+    long y = atoi(buffer.getValue(1));
+    long m = atoi(buffer.getValue(2));
+    long d = atoi(buffer.getValue(3));
+    long h = atoi(buffer.getValue(4));
+    long mm = atoi(buffer.getValue(5));
+    long s = atoi(buffer.getValue(6));
     rtc.adjust(DateTime(y, m, d, h, mm, s));
     Serial.println("DateTime set");
-  } else if (btBuffer.startsWith("CLOCK")) {
+  } 
+  else 
+  if (buffer.GetFirstChar(0) == cmd_CLOCK) 
+  {
     mode = CLOCK_MODE;    
-  } else if (btBuffer.startsWith("TEMPERATURE")) {
+  } 
+  else 
+  if (buffer.GetFirstChar(0) == cmd_TEMPERATURE) 
+  {
     mode = TEMPERATURE_MODE;    
-  } else if (btBuffer.startsWith("HUMIDITY")) {
+  } 
+  else 
+  if (buffer.GetFirstChar(0) == cmd_HUMIDITY) 
+  {
     mode = HUMIDITY_MODE;
-  } else if (btBuffer.startsWith("SCOREBOARD")) {
-    scoreLeft = getValue(btBuffer, ',', 1).toInt();
-    scoreRight = getValue(btBuffer, ',', 2).toInt();
+  } 
+  else 
+  if (buffer.GetFirstChar(0) == cmd_SCOREBOARD) 
+  {
+    scoreLeft = atoi(buffer.getValue(1));
+    scoreRight = atoi(buffer.getValue(2));
     mode = SCOREBOARD_MODE;    
-  } else if (btBuffer.startsWith("STARTTIMER")) {
+  } 
+  else 
+  if (buffer.GetFirstChar(0) == cmd_STARTTIMER) 
+  {
     timerValue = 0;
     timerRunning = 1;
     mode = TIMECOUNTER_MODE;    
-  } else if (btBuffer.startsWith("STOPTIMER")) {
+  } 
+  else 
+  if (buffer.GetFirstChar(0) == cmd_STOPTIMER) 
+  {
     timerRunning = 0;
     mode = TIMECOUNTER_MODE;    
-  } else if (btBuffer.startsWith("CHANGINGPATTERN")) {
+  } 
+  else 
+  if (buffer.GetFirstChar(0) == cmd_CHANGINGPATTERN) 
+  {
     colorMODE = COLORCHNGPATTRN_MODE;
-  } else if (btBuffer.startsWith("CLOCKTH")) {
+  } 
+  else 
+  if (buffer.GetFirstChar(0) == cmd_CLOCK_TMP_HUM) 
+  {
     mode = CLOCK_TEMP_HUM_MODE;
   }
   
   refreshDisplay();
 }
+
 
 void updateHue() 
 {
@@ -260,9 +314,9 @@ void updateHue()
 
 void Collect_T_H() // Чтение данных сенсоров температуры и влажности
 {
-  float tmp = dht.readTemperature(temperatureMode == 'F' ? true : false);
+  int tmp = dht.readTemperature(temperatureMode == 'F' ? true : false); Serial.print("tmp = "); Serial.println(tmp);
   
-  if (isnan(tmp)) 
+  if (tmp == INT16_MIN) 
   {
     Serial.println(FAILED_TO_READ_DHT);
   } 
@@ -271,9 +325,9 @@ void Collect_T_H() // Чтение данных сенсоров темпера�
     AverageTemperature.AddNext(tmp);
   }
   
-  float hum = dht.readHumidity();
+  int hum = dht.readHumidity(); Serial.print("hum = "); Serial.println(hum);
   
-  if (isnan(hum)) 
+  if (hum == INT16_MIN) 
   {
     Serial.println(FAILED_TO_READ_DHT);
   } 
@@ -366,43 +420,59 @@ void displayClock()
   FastLED.show();
 }
 
+void DHT11_NAN()
+{
+  LEDs[21] = LEDs[28] = ((colorMODE == CRGB_MODE) ? colorCRGB : colorCHSV);
+}
+
 void displayTemperature() 
 {
-  float tmp = AverageTemperature.Get();
+  int tmp = AverageTemperature.Get();
+  uint8_t tmp1, tmp2;
 
-  if (isnan(tmp)) 
+  if(tmp != INT16_MIN)
   {
-    Serial.println(FAILED_TO_READ_DHT);
-    return;
-  } 
+    tmp  /=  10;
+    tmp1 = tmp / 10;
+    tmp2 = tmp % 10;
+  }
+  else
+  {
+    tmp1 = tmp2 = 15;
+  }
 
-  int tmp1 = tmp / 10;
-  int tmp2 = ((int)tmp) % 10;
-  displaySegments(HOUR_HI, tmp1);    
-  displaySegments(HOUR_LO, tmp2);
   displaySegments(MINUTE_HI,  10);    
   displaySegments(MINUTE_LO, (temperatureMode == 'F' ? 14 : 11));
+  displaySegments(HOUR_HI, tmp1);    
+  displaySegments(HOUR_LO, tmp2);
   displayDots(DOTS_BOTH_OFF_MODE);  
+
   FastLED.show();    
 }
 
 void displayHumidity() 
 {
-  float hum = AverageHumidity.Get();
-  
-  if (isnan(hum)) 
-  {
-    Serial.println(FAILED_TO_READ_DHT);
-    return;
-  } 
+  int hum = AverageHumidity.Get();
+  uint8_t hum1, hum2;
 
-  int hum1 = hum / 10;
-  int hum2 = ((int)hum) % 10;
-  displaySegments(HOUR_HI, hum1);    
-  displaySegments(HOUR_LO, hum2);
+  if(hum != INT16_MIN)
+  {
+    hum  /=  10;
+  
+    hum1 = hum / 10;
+    hum2 = hum % 10;
+  }
+  else
+  {
+    hum1 = hum2 = 15;
+  }
+
   displaySegments(MINUTE_HI,  10);    
   displaySegments(MINUTE_LO,  12);
+  displaySegments(HOUR_HI, hum1);    
+  displaySegments(HOUR_LO, hum2);
   displayDots(DOTS_BOTH_OFF_MODE);  
+
   FastLED.show();    
 }
 
@@ -497,6 +567,7 @@ void displaySegments(int startindex, int number) {
     0b01011100, // ยบ lower        12
     0b00000000, // Empty          13
     0b01110001, // F(ahrenheit)   14
+    0b01000000  // -              15
   };
 
   for (int i = 0; i < 7; i++) {
