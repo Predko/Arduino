@@ -99,14 +99,14 @@ Timer t3;
 CRGB colorCRGB = CRGB::MediumVioletRed;           // Change this if you want another default color, for example CRGB::Blue
 CHSV colorCHSV = CHSV(95, 255, 255);  // Green
 CRGB colorOFF  = CRGB::Black;      // Color of the segments that are 'disabled'. You can also set it to CRGB::Black
-volatile int colorMODE = CHSV_MODE;           // 0=CRGB, 1=CHSV, 2=Constant Color Changing pattern
-volatile int prevMode = -1;
+volatile uint8_t colorMODE = CHSV_MODE;           // 0=CRGB, 1=CHSV, 2=Constant Color Changing pattern
+volatile uint8_t prevMode = -1;
 volatile bool needRefresh = false;       
-volatile int mode;                // 0=Clock, 1=Temperature, 2=Humidity, 3=Scoreboard, 4=Time counter
+volatile uint8_t mode;                // 0=Clock, 1=Temperature, 2=Humidity, 3=Scoreboard, 4=Time counter
 volatile int scoreLeft = 0;
 volatile int scoreRight = 0;
-volatile long timerValue = 0;
-volatile int timerRunning = 0;
+volatile int timerValue = 0;
+volatile bool timerRunning = false;
 
 #define DOT_ON  true
 #define DOT_OFF false
@@ -116,7 +116,7 @@ volatile bool dotOnOff;
 #define hourFormat  24                // Set this to 12 or to 24 hour format
 #define temperatureMode 'C'           // Set this to 'C' for Celcius or 'F' for Fahrenheit
 
-AverageValue AverageTemperature(5);  // примерно 5 минут 
+AverageValue AverageTemperature(5);  // 5 последних измерений - примерно 5 минут 
 AverageValue AverageHumidity(5);
 
 SplitedString buffer;
@@ -156,6 +156,7 @@ void setup () {
   refreshDisplay();
   colorMODE = COLORCHNGPATTRN_MODE;
   mode = CLOCK_TEMP_HUM_MODE;
+  //Serial.println(FastLED.getBrightness());
 }
 
 void loop () {
@@ -172,7 +173,7 @@ void loop () {
 
   if (BTserial.available())
   {
-    char received = BTserial.read();
+    char received = BTserial.read(); //Serial.print("received = "); Serial.println(received);
     
     if (received == '|' || received == '.' || received == '\n')
     {
@@ -186,28 +187,43 @@ void loop () {
   }
 }
 
-#define cmd_RGBD '0'
-#define cmd_HSVD '1'
-#define cmd_RTC  '2'
+#define cmd_RGBD '0'                // , R,G,B,D
+#define cmd_HSVD '1'                // , H,S,V,D
+#define cmd_RTC  '2'                // , y, m, d, h, mm, s
 #define cmd_CLOCK '3'
 #define cmd_TEMPERATURE '4'
 #define cmd_HUMIDITY '5'
-#define cmd_SCOREBOARD '6'
+#define cmd_SCOREBOARD '6'          // , scoreLeft, scoreRight
 #define cmd_STARTTIMER '7'
 #define cmd_STOPTIMER '8'
 #define cmd_CHANGINGPATTERN '9'
 #define cmd_CLOCK_TMP_HUM 'A'
+#define cmd_SET_BRIGHTNESS 'B'      // , B
+#define cmd_VARIABLE_BRIGHTNESS 'C' // , BR_min, BR_max
 
+uint8_t DT[6][2] = // Day time brightness
+{
+  {10, 15},
+  {10, 16},
+  { 9, 17},
+  { 7, 18},
+  { 6, 19},
+  { 5, 20}
+};
+
+uint8_t BR_min = 30,
+        BR_max = 200;
+
+bool modeVariableBrightness = true; // true - Variable Brightness
 
 void processCommand(){
 
-  
   if (buffer.GetFirstChar(0) == cmd_RGBD) 
   {
-    long R = atoi(buffer.getValue(1));
-    long G = atoi(buffer.getValue(2));
-    long B = atoi(buffer.getValue(3));
-    long D = atoi(buffer.getValue(4));
+    int R = atoi(buffer.getValue(1));
+    int G = atoi(buffer.getValue(2));
+    int B = atoi(buffer.getValue(3));
+    int D = atoi(buffer.getValue(4));
     colorCRGB.red = R;
     colorCRGB.green = G;
     colorCRGB.blue = B;
@@ -217,10 +233,10 @@ void processCommand(){
   else 
   if (buffer.GetFirstChar(0) == cmd_HSVD) 
   {
-    long H = atoi(buffer.getValue(1));
-    long S = atoi(buffer.getValue(2));
-    long V = atoi(buffer.getValue(3));
-    long D = atoi(buffer.getValue(4));
+    int H = atoi(buffer.getValue(1));
+    int S = atoi(buffer.getValue(2));
+    int V = atoi(buffer.getValue(3));
+    int D = atoi(buffer.getValue(4));
     colorCHSV.hue = H;
     colorCHSV.sat = S;
     colorCHSV.val = V;
@@ -230,19 +246,19 @@ void processCommand(){
   else 
   if (buffer.GetFirstChar(0) == cmd_RTC) 
   {
-    long y = atoi(buffer.getValue(1));
-    long m = atoi(buffer.getValue(2));
-    long d = atoi(buffer.getValue(3));
-    long h = atoi(buffer.getValue(4));
-    long mm = atoi(buffer.getValue(5));
-    long s = atoi(buffer.getValue(6));
+    int y = atoi(buffer.getValue(1));
+    int m = atoi(buffer.getValue(2));
+    int d = atoi(buffer.getValue(3));
+    int h = atoi(buffer.getValue(4));
+    int mm = atoi(buffer.getValue(5));
+    int s = atoi(buffer.getValue(6));
     rtc.adjust(DateTime(y, m, d, h, mm, s));
     Serial.println("DateTime set");
   } 
   else 
   if (buffer.GetFirstChar(0) == cmd_CLOCK) 
   {
-    mode = CLOCK_MODE;    
+    mode = CLOCK_MODE;
   } 
   else 
   if (buffer.GetFirstChar(0) == cmd_TEMPERATURE) 
@@ -265,14 +281,13 @@ void processCommand(){
   if (buffer.GetFirstChar(0) == cmd_STARTTIMER) 
   {
     timerValue = 0;
-    timerRunning = 1;
+    timerRunning = true;
     mode = TIMECOUNTER_MODE;    
   } 
   else 
-  if (buffer.GetFirstChar(0) == cmd_STOPTIMER) 
+  if (mode == TIMECOUNTER_MODE && buffer.GetFirstChar(0) == cmd_STOPTIMER) 
   {
-    timerRunning = 0;
-    mode = TIMECOUNTER_MODE;    
+    timerRunning = false;
   } 
   else 
   if (buffer.GetFirstChar(0) == cmd_CHANGINGPATTERN) 
@@ -284,7 +299,36 @@ void processCommand(){
   {
     mode = CLOCK_TEMP_HUM_MODE;
   }
+  else 
+  if (buffer.GetFirstChar(0) == cmd_SET_BRIGHTNESS) 
+  {
+    uint8_t D = atoi(buffer.getValue(1));
+    
+    FastLED.setBrightness(D);
+  } 
+  else 
+  if (buffer.GetFirstChar(0) == cmd_VARIABLE_BRIGHTNESS) 
+  {
+    if(modeVariableBrightness)
+    {
+      modeVariableBrightness = false;
+      
+      FastLED.setBrightness(BR_max);
+    }
+    else
+    {
+      uint8_t i = atoi(buffer.getValue(1));
+      BR_min = (i != 0) ? i : BR_min;
+      
+      i = atoi(buffer.getValue(2));
+      BR_max = (i != 0) ? i : BR_max;
+      
+      modeVariableBrightness = true;
+    }
+  } 
   
+  buffer.Reset();
+
   refreshDisplay();
 }
 
@@ -314,7 +358,7 @@ void updateHue()
 
 void Collect_T_H() // Чтение данных сенсоров температуры и влажности
 {
-  int tmp = dht.readTemperature(temperatureMode == 'F' ? true : false); Serial.print("tmp = "); Serial.println(tmp);
+  int tmp = dht.readTemperature(temperatureMode == 'F' ? true : false);
   
   if (tmp == INT16_MIN) 
   {
@@ -325,7 +369,7 @@ void Collect_T_H() // Чтение данных сенсоров темпера�
     AverageTemperature.AddNext(tmp);
   }
   
-  int hum = dht.readHumidity(); Serial.print("hum = "); Serial.println(hum);
+  int hum = dht.readHumidity();
   
   if (hum == INT16_MIN) 
   {
@@ -337,10 +381,34 @@ void Collect_T_H() // Чтение данных сенсоров темпера�
   }
 }
 
+#define BEGIN_DAY 0
+#define END_DAY   1
+
 void refreshT1()
 {
+  if(modeVariableBrightness)
+  {
+    DateTime now = rtc.now();
+
+    uint8_t m = now.month(),
+            h = now.hour();
+
+    m = (m <= 6) 
+            ? m - 1 
+            : 12 - m;
+
+    if(h >= DT[m][BEGIN_DAY] && h <= DT[m][END_DAY])
+    {
+      FastLED.setBrightness(BR_max);
+    }
+    else
+    {
+      FastLED.setBrightness(BR_min);
+    }
+  }
+
   Collect_T_H();
-  
+  //Serial.println(rtc.getTemperature());
   refreshDisplay();
 }
 
@@ -379,7 +447,7 @@ void refreshTimer()
     displayDots(dotMode);
   } 
   else 
-  if (mode == TIMECOUNTER_MODE && timerRunning == 1 && timerValue < 6000) 
+  if (mode == TIMECOUNTER_MODE && timerRunning && timerValue < 6000) 
   {
     timerValue++;
 
@@ -571,22 +639,10 @@ void displaySegments(int startindex, int number) {
   };
 
   for (int i = 0; i < 7; i++) {
-    LEDs[i + startindex] = ((numbers[number] & 1 << i) == 1 << i) ? (colorMODE == CRGB_MODE ? colorCRGB : colorCHSV) : colorOFF;
+    LEDs[i + startindex] = ((numbers[number] & 1 << i) == 1 << i) 
+                            ? (colorMODE == CRGB_MODE 
+                                          ? colorCRGB 
+                                          : colorCHSV) 
+                            : colorOFF;
   } 
-}
-
-String getValue(String data, char separator, int index) {
-  int found = 0;
-  int strIndex[] = {0, -1};
-  int maxIndex = data.length()-1;
-
-  for(int i=0; i<=maxIndex && found<=index; i++){
-    if(data.charAt(i)==separator || i==maxIndex){
-        found++;
-        strIndex[0] = strIndex[1]+1;
-        strIndex[1] = (i == maxIndex) ? i+1 : i;
-    }
-  }
-
-  return found>index ? data.substring(strIndex[0], strIndex[1]) : "";
 }

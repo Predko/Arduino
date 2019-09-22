@@ -19,12 +19,11 @@ class SplitedString {
           char  dlmt;
           uint8_t current,
                   posLenght;    // адресс байта с длиной подстроки.
-          uint8_t count;
 
   public:
           SplitedString(char d = ',');
 
-          void Reset() { *str = 0;}
+          void Reset();
           void AddChar(char ch);
 
           char *getValue(uint8_t pos);

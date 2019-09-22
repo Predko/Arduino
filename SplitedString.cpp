@@ -10,20 +10,30 @@ getValue(uint8_t numb_substriing), возвращает подстроку(Strin
 */
 
 
-SplitedString::SplitedString(char dl = ',')
+SplitedString::SplitedString(char dl)
 {
-  count = posLenght = 0;
-  current = 1;
-  dlmt = dl;
+	dlmt = dl;
+	Reset();
+}
+
+void SplitedString::Reset() 
+{ 
+	posLenght = 0;
+	for (uint8_t i = 0; i != 100; i++)
+	{
+		str[i] = 0;
+	}
+
+	current = 1;
 }
 
 void SplitedString::AddChar(char ch)
 {
   if(ch != dlmt)
   {
-    str[current++] = ch;
+    str[current] = ch;
     
-    str[current] = 0;
+    str[++current] = 0;
     
     str[posLenght]++;
   }
@@ -52,7 +62,7 @@ char *SplitedString::getValue(uint8_t numb_substr)
   {
     return NULL;  // строка пустая или у неё нет такой подстроки
   }
-  
+  //Serial.print("getValue = "); Serial.println(s+1);
   return s + 1; // первый байт - длина подстроки, поэтому указываем на следующий
 }
 
