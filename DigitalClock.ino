@@ -67,7 +67,16 @@
 #include <RTClib.h>
 #include <SoftwareSerial.h>
 #include <Timer.h>
-#include <avr/wdt.h>    // watchdog
+
+// Watch dog может не работать на некоторых платах Arduino.
+// Например, на NANO не работает со стандартным загрузчиком.
+// В этом случае, требуется прошить загрузчик optiboot.
+
+#define WATCHDOG_ENABLE   // Закомментируйте, если данная функция не нужна. 
+
+#ifdef WATCHDOG_ENABLE
+  #include <avr/wdt.h>    // watchdog
+#endif
 
 
 // DHT11
@@ -223,8 +232,9 @@ AverageValue AverageHumidity(10);
 
 void setup () 
 {
-  wdt_disable();    // Отключаем WatchDog после запуска программы
- 
+  #ifdef WATCHDOG_ENABLE
+    wdt_disable();    // Отключаем WatchDog после запуска программы
+  #endif
    // Initialize LED strip
   FastLED.delay(3000);
 
@@ -260,12 +270,16 @@ void setup ()
   colorMODE = COLORCHNGPATTRN_MODE;
   mode = CLOCK_TEMP_HUM_MODE;
 
-  wdt_enable (WDTO_8S);   // Включаем WatchDog с 8-ми секундным интервалом
+  #ifdef WATCHDOG_ENABLE
+    wdt_enable (WDTO_8S);   // Включаем WatchDog с 8-ми секундным интервалом
+  #endif  
 }
 
 void loop () {
   
-  wdt_reset();  // сбрасываем WatchDog
+  #ifdef WATCHDOG_ENABLE
+    wdt_reset();  // сбрасываем WatchDog
+  #endif
 
   t1.update(); 
   t2.update();
@@ -277,21 +291,27 @@ void loop () {
     needRefresh = false;
   }
 
-  wdt_reset();  // сбрасываем WatchDog
+  #ifdef WATCHDOG_ENABLE
+    wdt_reset();  // сбрасываем WatchDog
+  #endif
 
   if (BTserial.available())
   {
     char received = BTserial.read();
     btBuffer += received;
 
+  #ifdef WATCHDOG_ENABLE
     wdt_reset();  // сбрасываем WatchDog
+  #endif
 
     if (received == '|' || received == '.' || received == '\n')
     {
         processCommand();
         btBuffer = "";
 
-        wdt_reset();  // сбрасываем WatchDog
+  #ifdef WATCHDOG_ENABLE
+    wdt_reset();  // сбрасываем WatchDog
+  #endif
     }
   }
 }
