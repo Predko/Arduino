@@ -33,12 +33,51 @@
  * "Небольшие изменения внесены Предко Виктором"
  */
 
+/*
+  Список кодов ошибок
+  #1 - недостаточно памяти для работы экземпляра
+  #2 - Couldn't find RTC
+  #3 - RTC lost power, lets set the time!
+  #4 - Failed to read from DHT sensor!
+  
+  Список кодов сообщений
+  !1 - BTserial started at 9600
+  !2 - DateTime set
+*/
+
+/*
+  Список команд:
+
+    "RGBD"      "RGBD"
+    "HSVD"      "HSVD"
+    "RTC"       "RTC"
+    "CLK"       "CLOCK"
+    "TEMP"      "TEMPERATURE"
+    "HMDT"      "HUMIDITY"
+    "SCRBRD"    "SCOREBOARD"
+    "STTMR"     "STARTTIMER"
+    "SPTMR"     "STOPTIMER"
+    "CHNGPTRN"  "CHANGINGPATTERN"
+    "CLKTH"     "CLOCKTH"
+*/
+
 #include <DHT.h>
 #include <FastLED.h>
 #include <Wire.h>
 #include <RTClib.h>
 #include <SoftwareSerial.h>
 #include <Timer.h>
+
+// Watch dog может не работать на некоторых платах Arduino.
+// Например, на NANO не работает со стандартным загрузчиком.
+// В этом случае, требуется прошить загрузчик optiboot.
+
+#define WATCHDOG_ENABLE   // Закомментируйте, если данная функция не нужна. 
+
+#ifdef WATCHDOG_ENABLE
+  #include <avr/wdt.h>    // watchdog
+#endif
+
 
 // DHT11
 #define DHTPIN 12
@@ -113,8 +152,7 @@ volatile bool dotOnOff;
 
 #define MAX_MEASUREMENTS 10
 
-
-// экземпляр класса аккамулирует некоторое количество измерений
+// экземпляр класса аккумулирует некоторое количество измерений
 // (не больше MAX_MEASUREMENTS и равное указанному при создании).
 // Возращает среднее значение за последние numberOfMeasurements измерений
 class AverageValue 
@@ -141,7 +179,7 @@ AverageValue::AverageValue(int nm)
   if(values == NULL)
   {
     numberOfMeasurements = 0; // недостаточно памяти для работы экземпляра
-    Serial.println("недостаточно памяти для работы экземпляра");
+    Serial.println("#1");
   }
 
   Init(); 
@@ -192,9 +230,12 @@ void AverageValue::AddNext(float val)
 AverageValue AverageTemperature(10);  // примерно 5 минут 
 AverageValue AverageHumidity(10);
 
-void setup () {
-
-  // Initialize LED strip
+void setup () 
+{
+  #ifdef WATCHDOG_ENABLE
+    wdt_disable();    // Отключаем WatchDog после запуска программы
+  #endif
+   // Initialize LED strip
   FastLED.delay(3000);
 
   // Check if you're LED strip is a RGB or GRB version (third parameter)
@@ -204,17 +245,17 @@ void setup () {
   while (!Serial) { /* Wait until serial is ready */ }
 
   BTserial.begin(9600);
-  Serial.println("BTserial started at 9600");
+  Serial.println("!1");
 
   dht.begin();
 
   if (!rtc.begin()) {
-    Serial.println("Couldn't find RTC");
+    Serial.println("#2");
     while (1);
   }
 
   if (rtc.lostPower()) {
-    Serial.println("RTC lost power, lets set the time!");
+    Serial.println("#3");
     // following line sets the RTC to the date & time this sketch was compiled
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
   }
@@ -228,10 +269,18 @@ void setup () {
   refreshDisplay();
   colorMODE = COLORCHNGPATTRN_MODE;
   mode = CLOCK_TEMP_HUM_MODE;
+
+  #ifdef WATCHDOG_ENABLE
+    wdt_enable (WDTO_8S);   // Включаем WatchDog с 8-ми секундным интервалом
+  #endif  
 }
 
 void loop () {
   
+  #ifdef WATCHDOG_ENABLE
+    wdt_reset();  // сбрасываем WatchDog
+  #endif
+
   t1.update(); 
   t2.update();
   t3.update();
@@ -242,15 +291,27 @@ void loop () {
     needRefresh = false;
   }
 
+  #ifdef WATCHDOG_ENABLE
+    wdt_reset();  // сбрасываем WatchDog
+  #endif
+
   if (BTserial.available())
   {
     char received = BTserial.read();
-    btBuffer += received; 
+    btBuffer += received;
+
+  #ifdef WATCHDOG_ENABLE
+    wdt_reset();  // сбрасываем WatchDog
+  #endif
 
     if (received == '|' || received == '.' || received == '\n')
     {
         processCommand();
         btBuffer = "";
+
+  #ifdef WATCHDOG_ENABLE
+    wdt_reset();  // сбрасываем WatchDog
+  #endif
     }
   }
 }
@@ -285,27 +346,27 @@ void processCommand(){
     long mm = getValue(btBuffer, ',', 5).toInt();
     long s = getValue(btBuffer, ',', 6).toInt();
     rtc.adjust(DateTime(y, m, d, h, mm, s));
-    Serial.println("DateTime set");
-  } else if (btBuffer.startsWith("CLOCK")) {
+    Serial.println("!2");
+  } else if (btBuffer.startsWith("CLK")) {
     mode = CLOCK_MODE;    
-  } else if (btBuffer.startsWith("TEMPERATURE")) {
+  } else if (btBuffer.startsWith("TEMP")) {
     mode = TEMPERATURE_MODE;    
-  } else if (btBuffer.startsWith("HUMIDITY")) {
+  } else if (btBuffer.startsWith("HMDT")) {
     mode = HUMIDITY_MODE;
-  } else if (btBuffer.startsWith("SCOREBOARD")) {
+  } else if (btBuffer.startsWith("SCRBRD")) {
     scoreLeft = getValue(btBuffer, ',', 1).toInt();
     scoreRight = getValue(btBuffer, ',', 2).toInt();
     mode = SCOREBOARD_MODE;    
-  } else if (btBuffer.startsWith("STARTTIMER")) {
+  } else if (btBuffer.startsWith("STTMR")) {
     timerValue = 0;
     timerRunning = 1;
     mode = TIMECOUNTER_MODE;    
-  } else if (btBuffer.startsWith("STOPTIMER")) {
+  } else if (btBuffer.startsWith("SPTMR")) {
     timerRunning = 0;
     mode = TIMECOUNTER_MODE;    
-  } else if (btBuffer.startsWith("CHANGINGPATTERN")) {
+  } else if (btBuffer.startsWith("CHNGPTRN")) {
     colorMODE = COLORCHNGPATTRN_MODE;
-  } else if (btBuffer.startsWith("CLOCKTH")) {
+  } else if (btBuffer.startsWith("CLKTH")) {
     mode = CLOCK_TEMP_HUM_MODE;
   }
   
@@ -339,7 +400,7 @@ void Collect_T_H()
   
   if (isnan(tmp)) 
   {
-    Serial.println("Failed to read from DHT sensor!");
+    Serial.println("#4");
   } 
   else 
   {
@@ -350,7 +411,7 @@ void Collect_T_H()
   
   if (isnan(hum)) 
   {
-    Serial.println("Failed to read from DHT sensor!");
+    Serial.println("#4");
   } 
   else 
   {
@@ -447,7 +508,7 @@ void displayTemperature()
 
   if (isnan(tmp)) 
   {
-    Serial.println("Failed to read from DHT sensor!");
+    Serial.println("#4");
     return;
   } 
 
@@ -467,7 +528,7 @@ void displayHumidity()
   
   if (isnan(hum)) 
   {
-    Serial.println("Failed to read from DHT sensor!");
+    Serial.println("#4");
     return;
   } 
 
