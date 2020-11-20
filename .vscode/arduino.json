@@ -3,6 +3,6 @@
     "configuration": "mhz=16MHz,cpu=atmega328p",
     "sketch": "DigitalClock.ino",
     "output": "build",
-    "port": "COM13",
+    "port": "COM3",
     "programmer": "ArduinoISP"
 }
