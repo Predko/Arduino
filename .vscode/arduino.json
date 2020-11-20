@@ -1,8 +1,0 @@
-{
-    "board": "arduino:avr:nano",
-    "configuration": "cpu=atmega328old",
-    "sketch": "DigitalClock.ino",
-    "output": "build",
-    "port": "COM13",
-    "programmer": "ArduinoISP"
-}
