@@ -61,6 +61,8 @@
     "CLKTH"     "CLOCKTH"
 */
 
+#include <ModifiedMovingAverage.h>
+
 #include <DHT.h>
 #include <FastLED.h>
 #include <Wire.h>
@@ -86,16 +88,16 @@
 DHT dht(DHTPIN, DHTTYPE);
 
 // LED
-#define NUM_LEDS 29     
+#define NUMB_LEDS 29     
 #define DATA_PIN 6
 
-#define MINUTE_LO 0
-#define MINUTE_HI 7
+#define MINUTE_LOW 0
+#define MINUTE_HIGH 7
 
 #define DOTS 14
 
-#define HOUR_LO 15
-#define HOUR_HI 22
+#define HOUR_LOW 15
+#define HOUR_HIGH 22
 
 // mode
 #define CLOCK_MODE 0
@@ -117,26 +119,30 @@ DHT dht(DHTPIN, DHTTYPE);
 #define DOTS_BLINK_MODE 3
 
 uint8_t dotMode = DOTS_BLINK_MODE;
-CRGB LEDs[NUM_LEDS];
+CRGB LEDs[NUMB_LEDS];
 
 // Bluetooth
 #define BT_PIN_RX 2
 #define BT_PIN_TX 3
 
 SoftwareSerial BTserial(BT_PIN_RX, BT_PIN_TX);
+
 RTC_DS3231 rtc;
+
 Timer t1;
 Timer t2;
 Timer t3;
 
 String btBuffer;
-CRGB colorCRGB = CRGB::MediumVioletRed;           // Change this if you want another default color, for example CRGB::Blue
-CHSV colorCHSV = CHSV(95, 255, 255);  // Green
-CRGB colorOFF  = CRGB::Black;      // Color of the segments that are 'disabled'. You can also set it to CRGB::Black
-volatile int colorMODE = CHSV_MODE;           // 0=CRGB, 1=CHSV, 2=Constant Color Changing pattern
+
+CRGB colorCRGB = CRGB::MediumVioletRed; // Change this if you want another default color, for example CRGB::Blue
+CHSV colorCHSV = CHSV(95, 255, 255);    // Green
+CRGB colorOFF  = CRGB::Black;           // Color of the segments that are 'disabled'. You can also set it to CRGB::Black
+
+volatile int colorMODE = CHSV_MODE;     // 0=CRGB, 1=CHSV, 2=Constant Color Changing pattern
 volatile int prevMode = -1;
 volatile bool needRefresh = false;       
-volatile int mode;                // 0=Clock, 1=Temperature, 2=Humidity, 3=Scoreboard, 4=Time counter
+volatile int mode;                      // 0=Clock, 1=Temperature, 2=Humidity, 3=Scoreboard, 4=Time counter
 volatile int scoreLeft = 0;
 volatile int scoreRight = 0;
 volatile long timerValue = 0;
@@ -152,83 +158,8 @@ volatile bool dotOnOff;
 
 #define MAX_MEASUREMENTS 10
 
-// экземпляр класса аккумулирует некоторое количество измерений
-// (не больше MAX_MEASUREMENTS и равное указанному при создании).
-// Возращает среднее значение за последние numberOfMeasurements измерений
-class AverageValue 
-{
-public:
-  AverageValue(int nm);  // nm <= MAX_MEASUREMENTS
-  float Get();
-  void Init();  
-  void AddNext(float val);
-
-private:
-  float *values;
-  float summ;
-  int currentVal;
-  int count;
-  int numberOfMeasurements;
-};
-
-AverageValue::AverageValue(int nm) 
-{  
-  numberOfMeasurements = (nm > MAX_MEASUREMENTS) ? MAX_MEASUREMENTS : nm;
-
-  values = new float[numberOfMeasurements];
-  if(values == NULL)
-  {
-    numberOfMeasurements = 0; // недостаточно памяти для работы экземпляра
-    Serial.println("#1");
-  }
-
-  Init(); 
-}
-
-void AverageValue::Init()
-{
-  summ = 0;
-  count = 0;
-  currentVal = 0;
-  for(int i = 0; i != numberOfMeasurements; i++)
-  {
-    values[i] = 0;
-  }
-}
-
-float AverageValue::Get()
-{
-  return (count != 0) ? summ / count : NAN;
-}
-
-void AverageValue::AddNext(float val)
-{
-  if(val == NAN)
-  {
-    return;
-  }
-
-  summ -= values[currentVal];
-  
-  summ += val;
-  
-  values[currentVal] = val;
-  
-  currentVal++;
-  
-  if(currentVal == numberOfMeasurements)
-  {
-    currentVal = 0;
-  }
-   
-  if(count != numberOfMeasurements)
-  {
-    count++;
-  }
-}
-
-AverageValue AverageTemperature(10);  // примерно 5 минут 
-AverageValue AverageHumidity(10);
+ModifiedMovingAverage<float> AverageTemperature(MAX_MEASUREMENTS);  // примерно 5 минут 
+ModifiedMovingAverage<float> AverageHumidity(MAX_MEASUREMENTS);
 
 void setup () 
 {
@@ -239,7 +170,7 @@ void setup ()
   FastLED.delay(3000);
 
   // Check if you're LED strip is a RGB or GRB version (third parameter)
-  FastLED.addLeds<WS2812B, DATA_PIN, GRB>(LEDs, NUM_LEDS);
+  FastLED.addLeds<WS2812B, DATA_PIN, GRB>(LEDs, NUMB_LEDS);
 
   Serial.begin(9600);
   while (!Serial) { /* Wait until serial is ready */ }
@@ -300,73 +231,115 @@ void loop () {
     char received = BTserial.read();
     btBuffer += received;
 
-  #ifdef WATCHDOG_ENABLE
-    wdt_reset();  // сбрасываем WatchDog
-  #endif
+    #ifdef WATCHDOG_ENABLE
+      wdt_reset();  // сбрасываем WatchDog
+    #endif
 
     if (received == '|' || received == '.' || received == '\n')
     {
         processCommand();
         btBuffer = "";
 
-  #ifdef WATCHDOG_ENABLE
-    wdt_reset();  // сбрасываем WatchDog
-  #endif
+    #ifdef WATCHDOG_ENABLE
+      wdt_reset();  // сбрасываем WatchDog
+    #endif
     }
   }
 }
 
 void processCommand(){
 
-  if (btBuffer.startsWith("RGBD")) {
-    long R = getValue(btBuffer, ',', 1).toInt();
-    long G = getValue(btBuffer, ',', 2).toInt();
-    long B = getValue(btBuffer, ',', 3).toInt();
-    long D = getValue(btBuffer, ',', 4).toInt();
-    colorCRGB.red = R;
-    colorCRGB.green = G;
-    colorCRGB.blue = B;
+  if (btBuffer.startsWith("RGBD")) 
+  {
     colorMODE = CRGB_MODE;
-    if (D > 0) FastLED.setBrightness(D); 
-  } else if (btBuffer.startsWith("HSVD")) {
-    long H = getValue(btBuffer, ',', 1).toInt();
-    long S = getValue(btBuffer, ',', 2).toInt();
-    long V = getValue(btBuffer, ',', 3).toInt();
+
+    colorCRGB.red = getValue(btBuffer, ',', 1).toInt();
+    colorCRGB.green = getValue(btBuffer, ',', 2).toInt();
+    colorCRGB.blue = getValue(btBuffer, ',', 3).toInt();
+
     long D = getValue(btBuffer, ',', 4).toInt();
-    colorCHSV.hue = H;
-    colorCHSV.sat = S;
-    colorCHSV.val = V;
+
+    if (D > 0)
+    { 
+      FastLED.setBrightness(D); 
+    }
+  } 
+  else 
+  if (btBuffer.startsWith("HSVD")) 
+  {
     colorMODE = CHSV_MODE;
-    if (D > 0) FastLED.setBrightness(D);
-  } else if (btBuffer.startsWith("RTC")) {
+
+    colorCHSV.hue = getValue(btBuffer, ',', 1).toInt();
+    colorCHSV.sat = getValue(btBuffer, ',', 2).toInt();
+    colorCHSV.val = getValue(btBuffer, ',', 3).toInt();
+
+    long D = getValue(btBuffer, ',', 4).toInt();
+
+    if (D > 0)
+    { 
+      FastLED.setBrightness(D);
+    }
+  } 
+  else 
+  if (btBuffer.startsWith("RTC")) 
+  {
     long y = getValue(btBuffer, ',', 1).toInt();
     long m = getValue(btBuffer, ',', 2).toInt();
     long d = getValue(btBuffer, ',', 3).toInt();
     long h = getValue(btBuffer, ',', 4).toInt();
     long mm = getValue(btBuffer, ',', 5).toInt();
     long s = getValue(btBuffer, ',', 6).toInt();
+    
     rtc.adjust(DateTime(y, m, d, h, mm, s));
+    
     Serial.println("!2");
-  } else if (btBuffer.startsWith("CLK")) {
+  } 
+  else 
+  if (btBuffer.startsWith("CLK")) 
+  {
     mode = CLOCK_MODE;    
-  } else if (btBuffer.startsWith("TEMP")) {
+  } 
+  else 
+  if (btBuffer.startsWith("TEMP")) 
+  {
     mode = TEMPERATURE_MODE;    
-  } else if (btBuffer.startsWith("HMDT")) {
+  } 
+  else 
+  if (btBuffer.startsWith("HMDT")) 
+  {
     mode = HUMIDITY_MODE;
-  } else if (btBuffer.startsWith("SCRBRD")) {
+  } 
+  else 
+  if (btBuffer.startsWith("SCRBRD")) 
+  {
+    mode = SCOREBOARD_MODE;    
+
     scoreLeft = getValue(btBuffer, ',', 1).toInt();
     scoreRight = getValue(btBuffer, ',', 2).toInt();
-    mode = SCOREBOARD_MODE;    
-  } else if (btBuffer.startsWith("STTMR")) {
+  } 
+  else 
+  if (btBuffer.startsWith("STTMR")) 
+  {
+    mode = TIMECOUNTER_MODE;    
+
     timerValue = 0;
     timerRunning = 1;
+  } 
+  else 
+  if (btBuffer.startsWith("SPTMR")) 
+  {
     mode = TIMECOUNTER_MODE;    
-  } else if (btBuffer.startsWith("SPTMR")) {
+
     timerRunning = 0;
-    mode = TIMECOUNTER_MODE;    
-  } else if (btBuffer.startsWith("CHNGPTRN")) {
+  } 
+  else 
+  if (btBuffer.startsWith("CHNGPTRN")) 
+  {
     colorMODE = COLORCHNGPATTRN_MODE;
-  } else if (btBuffer.startsWith("CLKTH")) {
+  } 
+  else 
+  if (btBuffer.startsWith("CLKTH")) 
+  {
     mode = CLOCK_TEMP_HUM_MODE;
   }
   
@@ -382,6 +355,7 @@ void updateHue()
      
   colorCHSV.sat = 255;
   colorCHSV.val = 255;
+
   if (colorCHSV.hue >= 255)
   {
     colorCHSV.hue = 0;
@@ -390,11 +364,12 @@ void updateHue()
   {
     colorCHSV.hue++;
   }
+
   refreshDisplay();
 }
 
 
-void Collect_T_H()
+void CollectTemperatureAndHumidity()
 {
   float tmp = dht.readTemperature(temperatureMode == 'F' ? true : false);
   
@@ -404,7 +379,7 @@ void Collect_T_H()
   } 
   else 
   {
-    AverageTemperature.AddNext(tmp);
+    AverageTemperature.CalcNew(tmp);
   }
   
   float hum = dht.readHumidity();
@@ -415,13 +390,13 @@ void Collect_T_H()
   } 
   else 
   {
-    AverageHumidity.AddNext(hum);
+    AverageHumidity.CalcNew(hum);
   }
 }
 
 void refreshT1()
 {
-  Collect_T_H();
+  CollectTemperatureAndHumidity();
   
   refreshDisplay();
 }
@@ -431,21 +406,27 @@ void refreshDisplay() {
     case CLOCK_MODE:
       displayClock();
       break;
+
     case TEMPERATURE_MODE:
       displayTemperature();
       break;
+      
     case HUMIDITY_MODE:
       displayHumidity();
       break;
+
     case SCOREBOARD_MODE:
       displayScoreboard();
-      break;      
+      break;
+
     case TIMECOUNTER_MODE:
       // Time counter has it's own timer
       break;
+
     case CLOCK_TEMP_HUM_MODE:
       displayClock();
       break;
+
     default:   
       break; 
   }
@@ -470,10 +451,10 @@ void refreshTimer()
     int s1 = (timerValue % 60) / 10;
     int s2 = (timerValue % 60) % 10;
   
-    displaySegments(MINUTE_LO, s2); 
-    displaySegments(MINUTE_HI, s1);
-    displaySegments(HOUR_LO, m2);    
-    displaySegments(HOUR_HI, m1);  
+    displaySegments(MINUTE_LOW, s2); 
+    displaySegments(MINUTE_HIGH, s1);
+    displaySegments(HOUR_LOW, m2);    
+    displaySegments(HOUR_HIGH, m1);  
     displayDots(DOTS_BOTH_ON_MODE);  
     FastLED.show();
   }
@@ -483,22 +464,26 @@ void displayClock()
 {   
   DateTime now = rtc.now();
 
-  int h  = now.hour();
+  int8_t h  = now.hour();
+  
   if (hourFormat == 12 && h > 12)
   {
     h = h - 12;
   }
 
-  int hl = (h / 10) == 0 ? 13 : (h / 10);
-  int hr = h % 10;
-  int ml = now.minute() / 10;
-  int mr = now.minute() % 10;
+  int8_t hl = (h / 10) == 0 ? 13 : (h / 10);
+  int8_t hr = h % 10;
+  
+  int8_t ml = now.minute() / 10;
+  int8_t mr = now.minute() % 10;
 
-  displaySegments(MINUTE_LO, mr);    
-  displaySegments(MINUTE_HI, ml);
-  displaySegments(HOUR_LO, hr);    
-  displaySegments(HOUR_HI, hl);  
-  displayDots(dotMode);  
+  displaySegments(MINUTE_LOW, mr);    
+  displaySegments(MINUTE_HIGH, ml);
+  displaySegments(HOUR_LOW, hr);    
+  displaySegments(HOUR_HIGH, hl);  
+  
+  displayDots(dotMode);
+
   FastLED.show();
 }
 
@@ -514,11 +499,14 @@ void displayTemperature()
 
   int tmp1 = tmp / 10;
   int tmp2 = ((int)tmp) % 10;
-  displaySegments(HOUR_HI, tmp1);    
-  displaySegments(HOUR_LO, tmp2);
-  displaySegments(MINUTE_HI,  10);    
-  displaySegments(MINUTE_LO, (temperatureMode == 'F' ? 14 : 11));
+
+  displaySegments(HOUR_HIGH, tmp1);    
+  displaySegments(HOUR_LOW, tmp2);
+  displaySegments(MINUTE_HIGH,  10);    
+  displaySegments(MINUTE_LOW, ( (temperatureMode == 'F') ? 14 : 11) );
+  
   displayDots(DOTS_BOTH_OFF_MODE);  
+  
   FastLED.show();    
 }
 
@@ -534,33 +522,39 @@ void displayHumidity()
 
   int hum1 = hum / 10;
   int hum2 = ((int)hum) % 10;
-  displaySegments(HOUR_HI, hum1);    
-  displaySegments(HOUR_LO, hum2);
-  displaySegments(MINUTE_HI,  10);    
-  displaySegments(MINUTE_LO,  12);
+  
+  displaySegments(HOUR_HIGH, hum1);    
+  displaySegments(HOUR_LOW, hum2);
+  displaySegments(MINUTE_HIGH,  10);    
+  displaySegments(MINUTE_LOW,  12);
   displayDots(DOTS_BOTH_OFF_MODE);  
+  
   FastLED.show();    
 }
 
-void displayScoreboard() {
+void displayScoreboard() 
+{
   int s1 = scoreLeft % 10;
   int s2 = scoreLeft / 10;
   int s3 = scoreRight % 10;
   int s4 = scoreRight / 10;
-  displaySegments(MINUTE_LO, s3);    
-  displaySegments(MINUTE_HI, s4);
-  displaySegments(HOUR_LO, s1);    
-  displaySegments(HOUR_HI, s2);
+
+  displaySegments(MINUTE_LOW, s3);    
+  displaySegments(MINUTE_HIGH, s4);
+  displaySegments(HOUR_LOW, s1);    
+  displaySegments(HOUR_HIGH, s2);
+
   displayDots(DOTS_BOTTOM_ON_MODE);  
+
   FastLED.show();  
 }
 
 void displayDots(int dotMode) 
 {
-
   if(mode == CLOCK_TEMP_HUM_MODE || prevMode != -1)
   {
     int8_t sec = rtc.now().second();
+
     if(sec > 20 && sec < 25)
     {
       if(prevMode == -1)
@@ -594,22 +588,26 @@ void displayDots(int dotMode)
   }
 
   // dotMode: 0=Both on, 1=Both Off, 2=Bottom On, 3=Blink
-  switch (dotMode) {
+  switch (dotMode) 
+  {
     case DOTS_BOTH_ON_MODE:
       LEDs[DOTS] = colorMODE == CRGB_MODE ? colorCRGB : colorCHSV;
       break;
+  
     case DOTS_BOTH_OFF_MODE:
       LEDs[DOTS] = colorOFF;
       break;
+  
     case DOTS_BOTTOM_ON_MODE:
       LEDs[DOTS] = colorOFF;
       break;
+  
     case DOTS_BLINK_MODE:
-      LEDs[DOTS] = (dotOnOff == DOT_OFF) 
-                              ? ((colorMODE == CRGB_MODE) ? colorCRGB : colorCHSV) 
-                              : colorOFF;
+      LEDs[DOTS] = (dotOnOff == DOT_OFF) ? ( (colorMODE == CRGB_MODE) ? colorCRGB : colorCHSV ) 
+                                         : colorOFF;
       FastLED.show();  
       break;
+    
     default:
       break;    
   }
@@ -635,23 +633,28 @@ void displaySegments(int startindex, int number) {
     0b01110001, // F(ahrenheit)   14
   };
 
-  for (int i = 0; i < 7; i++) {
-    LEDs[i + startindex] = ((numbers[number] & 1 << i) == 1 << i) ? (colorMODE == CRGB_MODE ? colorCRGB : colorCHSV) : colorOFF;
+  for (int i = 0; i < 7; i++) 
+  {
+    LEDs[i + startindex] = ( ((numbers[number] & 1 << i) == 1) << i) ? ( (colorMODE == CRGB_MODE) ? colorCRGB : colorCHSV) 
+                                                                     : colorOFF;
   } 
 }
 
-String getValue(String data, char separator, int index) {
+String getValue(String data, char separator, int index) 
+{
   int found = 0;
   int strIndex[] = {0, -1};
   int maxIndex = data.length()-1;
 
-  for(int i=0; i<=maxIndex && found<=index; i++){
-    if(data.charAt(i)==separator || i==maxIndex){
+  for(int i=0; i<=maxIndex && found<=index; i++)
+  {
+    if(data.charAt(i)==separator || i==maxIndex)
+    {
         found++;
         strIndex[0] = strIndex[1]+1;
         strIndex[1] = (i == maxIndex) ? i+1 : i;
     }
   }
 
-  return found>index ? data.substring(strIndex[0], strIndex[1]) : "";
+  return (found > index) ? data.substring(strIndex[0], strIndex[1]) : "";
 }

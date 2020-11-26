@@ -3,18 +3,21 @@
         {
             "name": "Win32",
             "includePath": [
-                "C:\\Users\\predk\\AppData\\Local\\Arduino15\\packages\\Optiboot\\hardware\\avr\\0.8.0\\**",
-                "d:/MyProgram/Arduino/libraries/**",
+                "C:/Users/predk/OneDrive/Документы/Arduino/libraries/**",
                 "d:/Program Files/Arduino/libraries/**",
                 "d:/Program Files/Arduino/hardware/arduino/avr/libraries/**",
-                "d:\\Program Files\\Arduino\\hardware\\arduino\\avr\\**",
-                "d:\\Program Files\\Arduino\\tools\\**"
+                "${workspaceFolder}",
+                "C:\\Users\\predk\\AppData\\Local\\Arduino15\\packages\\Optiboot\\hardware\\avr\\0.8.0\\**",
+                "d:\\Program Files\\Arduino\\libraries\\**",
+                "C:\\Users\\predk\\OneDrive\\Документы\\Arduino\\libraries\\**"
             ],
-            "forcedInclude": [],
-            "compilerPath": "\"D:/Program Files/Arduino/hardware/tools/avr/bin/avr-gcc.exe\"",
-            "cStandard": "c11",
+            "forcedInclude": [
+                "d:/Program Files/Arduino/hardware/arduino/avr/cores/arduino/Arduino.h"
+            ],
+            "compilerPath": "\"d:/Program Files/Arduino/hardware/tools/avr/bin/avr-gcc.exe\"",
+            "cStandard": "c17",
             "cppStandard": "c++17",
-            "intelliSenseMode": "gcc-x64",
+            "intelliSenseMode": "gcc-x86",
             "defines": [
                 "USBCON"
             ]
